@@ -12,7 +12,7 @@ const UserManagementPage: React.FC<UserManagementPageProps> = ({ users }) => {
         <h1 className="text-2xl font-black text-gray-900 tracking-tight uppercase">
           Users List
         </h1>
-        <p className="text-gray-500 text-sm font-medium italic text-xs">
+        <p className="text-gray-500 text-sm font-medium italic">
           รายชื่อพนักงานที่มีสิทธิ์ใช้งานระบบ
         </p>
       </header>
