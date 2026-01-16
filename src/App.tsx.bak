@@ -1,0 +1,1885 @@
+import React, {
+  useState,
+  useMemo,
+  useEffect,
+  DragEvent,
+  ChangeEvent,
+  FormEvent,
+} from "react";
+import {
+  LayoutDashboard,
+  FilePlus,
+  FileText,
+  CheckCircle2,
+  Clock,
+  ChevronRight,
+  Search,
+  ArrowLeft,
+  MessageSquare,
+  History as HistoryIcon,
+  Menu,
+  Settings,
+  Users,
+  Plus,
+  Trash2,
+  ShieldCheck,
+  UserCircle,
+  GripVertical,
+  Files,
+  Calendar,
+  XCircle,
+  CheckCircle,
+  Archive,
+  ArrowUpRight,
+  ChevronLeft,
+  Filter,
+  Edit2,
+  Save,
+  X,
+} from "lucide-react";
+
+/** * TYPES & INTERFACES
+ */
+type Role = "User" | "Accountant" | "Manager" | "Admin";
+
+interface IStatusConfig {
+  label: string;
+  color: string;
+}
+
+interface IDocument {
+  document_id: string;
+  document_no: string;
+  document_type: string;
+  description: string;
+  current_status: string;
+  created_by: string;
+  created_at: string;
+  owner: string;
+}
+
+interface IHistory {
+  id: string;
+  document_id: string;
+  from_status: string;
+  to_status: string;
+  action: string;
+  action_by: string;
+  action_at: string;
+  comment: string;
+}
+
+interface IUser {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  department: string;
+}
+
+/**
+ * CONFIGURATION & MOCK DATA
+ */
+const STATUS_CONFIG: Record<string, IStatusConfig> = {
+  Draft: {
+    label: "ร่างเอกสาร (Draft)",
+    color: "bg-gray-100 text-gray-700 border-gray-200",
+  },
+  Submitted: {
+    label: "ส่งแล้ว (Submitted)",
+    color: "bg-blue-50 text-blue-700 border-blue-200",
+  },
+  Review: {
+    label: "กำลังตรวจ (Review)",
+    color: "bg-yellow-100 text-yellow-700 border-yellow-200",
+  },
+  Rejected: {
+    label: "ตีกลับ (Rejected)",
+    color: "bg-red-100 text-red-700 border-red-200",
+  },
+  Verified: {
+    label: "ตรวจผ่าน (Verified)",
+    color: "bg-cyan-100 text-cyan-700 border-cyan-200",
+  },
+  Approval: {
+    label: "รออนุมัติ (Approval)",
+    color: "bg-orange-100 text-orange-700 border-orange-200",
+  },
+  Approved: {
+    label: "อนุมัติแล้ว (Approved)",
+    color: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  },
+  Accounting: {
+    label: "รอลงบัญชี (Accounting)",
+    color: "bg-indigo-100 text-indigo-700 border-indigo-200",
+  },
+  Posted: {
+    label: "ลงบัญชีแล้ว (Posted)",
+    color: "bg-violet-100 text-violet-700 border-violet-200",
+  },
+  Payment: {
+    label: "รอจ่ายเงิน (Payment)",
+    color: "bg-purple-100 text-purple-700 border-purple-200",
+  },
+  Paid: {
+    label: "จ่ายเงินแล้ว (Paid)",
+    color: "bg-green-100 text-green-700 border-green-200",
+  },
+  Failed: {
+    label: "จ่ายล้มเหลว (Failed)",
+    color: "bg-rose-100 text-rose-700 border-rose-200",
+  },
+  Completed: {
+    label: "ปิดงาน (Completed)",
+    color: "bg-slate-200 text-slate-700 border-slate-300",
+  },
+};
+
+const INITIAL_STAGES: string[] = [
+  "Draft",
+  "Submitted",
+  "Review",
+  "Verified",
+  "Approval",
+  "Approved",
+  "Accounting",
+  "Posted",
+  "Payment",
+  "Paid",
+  "Completed",
+];
+const INITIAL_TYPES: string[] = [
+  "Invoice",
+  "Expense Claim",
+  "Purchase Order",
+  "Petty Cash",
+];
+
+const INITIAL_USERS: IUser[] = [
+  {
+    id: "u1",
+    name: "John Doe",
+    email: "john@company.com",
+    role: "User",
+    department: "Sales",
+  },
+  {
+    id: "u2",
+    name: "Jane Smith",
+    email: "jane@company.com",
+    role: "Accountant",
+    department: "Finance",
+  },
+  {
+    id: "u3",
+    name: "Admin Master",
+    email: "admin@company.com",
+    role: "Admin",
+    department: "IT",
+  },
+  {
+    id: "u4",
+    name: "Robert Manager",
+    email: "robert@company.com",
+    role: "Manager",
+    department: "Management",
+  },
+];
+
+const INITIAL_DOCUMENTS: IDocument[] = [
+  {
+    document_id: "1",
+    document_no: "INV-2024-001",
+    document_type: "Invoice",
+    description: "ค่าบริการคลาวด์รายเดือน Q4",
+    current_status: "Review",
+    created_by: "John Doe",
+    created_at: "2024-01-01 09:00",
+    owner: "Accountant Dept",
+  },
+  {
+    document_id: "2",
+    document_no: "EXP-2024-002",
+    document_type: "Expense Claim",
+    description: "ค่าเดินทางไปพบลูกค้าที่ระยอง",
+    current_status: "Completed",
+    created_by: "Alice Wong",
+    created_at: "2024-01-02 10:30",
+    owner: "Archive",
+  },
+  {
+    document_id: "3",
+    document_no: "PO-2024-003",
+    document_type: "Purchase Order",
+    description: "จัดซื้อแล็ปท็อปแผนกการตลาด",
+    current_status: "Approval",
+    created_by: "Bob Smith",
+    created_at: "2024-01-03 14:15",
+    owner: "Management",
+  },
+  {
+    document_id: "4",
+    document_no: "PC-2024-004",
+    document_type: "Petty Cash",
+    description: "ค่าอุปกรณ์สำนักงานส่วนกลาง",
+    current_status: "Draft",
+    created_by: "John Doe",
+    created_at: "2024-01-04 11:00",
+    owner: "User",
+  },
+  {
+    document_id: "5",
+    document_no: "INV-2024-005",
+    document_type: "Invoice",
+    description: "ค่าบำรุงรักษาอาคารประจำปี",
+    current_status: "Payment",
+    created_by: "Sarah Connor",
+    created_at: "2024-01-05 16:45",
+    owner: "Accountant Dept",
+  },
+  {
+    document_id: "6",
+    document_no: "EXP-2024-006",
+    document_type: "Expense Claim",
+    description: "ค่าที่พักดูงานต่างจังหวัด",
+    current_status: "Rejected",
+    created_by: "Alice Wong",
+    created_at: "2024-01-06 09:20",
+    owner: "User",
+  },
+  {
+    document_id: "7",
+    document_no: "PO-2024-007",
+    document_type: "Purchase Order",
+    description: "สั่งซื้อซอฟต์แวร์ลิขสิทธิ์ Adobe",
+    current_status: "Accounting",
+    created_by: "Charlie Brown",
+    created_at: "2024-01-07 13:00",
+    owner: "Accountant Dept",
+  },
+  {
+    document_id: "8",
+    document_no: "INV-2024-008",
+    document_type: "Invoice",
+    description: "ค่าโฆษณา Facebook Ads ม.ค.",
+    current_status: "Submitted",
+    created_by: "Bob Smith",
+    created_at: "2024-01-08 10:00",
+    owner: "Accountant Dept",
+  },
+  {
+    document_id: "9",
+    document_no: "PC-2024-009",
+    document_type: "Petty Cash",
+    description: "ค่าน้ำดื่มและของว่างรับรองแขก",
+    current_status: "Verified",
+    created_by: "John Doe",
+    created_at: "2024-01-09 15:30",
+    owner: "Accountant Dept",
+  },
+  {
+    document_id: "10",
+    document_no: "EXP-2024-010",
+    document_type: "Expense Claim",
+    description: "ค่าไปรษณีย์ส่งเอกสารด่วน",
+    current_status: "Posted",
+    created_by: "Alice Wong",
+    created_at: "2024-01-10 11:10",
+    owner: "Accountant Dept",
+  },
+  {
+    document_id: "11",
+    document_no: "INV-2024-011",
+    document_type: "Invoice",
+    description: "ค่าบริการอินเทอร์เน็ตออฟฟิศ",
+    current_status: "Approved",
+    created_by: "Sarah Connor",
+    created_at: "2024-01-11 14:00",
+    owner: "Accountant Dept",
+  },
+  {
+    document_id: "12",
+    document_no: "PO-2024-012",
+    document_type: "Purchase Order",
+    description: "โต๊ะทำงานพนักงานใหม่ 5 ชุด",
+    current_status: "Paid",
+    created_by: "Bob Smith",
+    created_at: "2024-01-12 09:45",
+    owner: "Accountant Dept",
+  },
+  {
+    document_id: "13",
+    document_no: "PC-2024-013",
+    document_type: "Petty Cash",
+    description: "ค่าจัดเตรียมงานเลี้ยงปีใหม่",
+    current_status: "Review",
+    created_by: "John Doe",
+    created_at: "2024-01-12 16:00",
+    owner: "Accountant Dept",
+  },
+  {
+    document_id: "14",
+    document_no: "EXP-2024-014",
+    document_type: "Expense Claim",
+    description: "ค่าทำกุญแจสำรองออฟฟิศ",
+    current_status: "Verified",
+    created_by: "Alice Wong",
+    created_at: "2024-01-13 10:20",
+    owner: "Accountant Dept",
+  },
+  {
+    document_id: "15",
+    document_no: "INV-2024-015",
+    document_type: "Invoice",
+    description: "ค่าเช่าเครื่องถ่ายเอกสาร ม.ค.",
+    current_status: "Draft",
+    created_by: "Bob Smith",
+    created_at: "2024-01-13 11:45",
+    owner: "User",
+  },
+  {
+    document_id: "16",
+    document_no: "INV-2024-016",
+    document_type: "Invoice",
+    description: "ค่าจ้างทำความสะอาดรายสัปดาห์",
+    current_status: "Review",
+    created_by: "Sarah Connor",
+    created_at: "2024-01-14 08:30",
+    owner: "Accountant Dept",
+  },
+  {
+    document_id: "17",
+    document_no: "EXP-2024-017",
+    document_type: "Expense Claim",
+    description: "เบี้ยเลี้ยงเดินทางต่างประเทศ",
+    current_status: "Accounting",
+    created_by: "Alice Wong",
+    created_at: "2024-01-14 10:00",
+    owner: "Accountant Dept",
+  },
+  {
+    document_id: "18",
+    document_no: "PO-2024-018",
+    document_type: "Purchase Order",
+    description: "สั่งซื้อเครื่องสำรองไฟ (UPS)",
+    current_status: "Approval",
+    created_by: "Charlie Brown",
+    created_at: "2024-01-14 13:45",
+    owner: "Management",
+  },
+  {
+    document_id: "19",
+    document_no: "PC-2024-019",
+    document_type: "Petty Cash",
+    description: "ค่าไปรษณีย์ส่งของขวัญลูกค้า",
+    current_status: "Paid",
+    created_by: "John Doe",
+    created_at: "2024-01-15 09:15",
+    owner: "Accountant Dept",
+  },
+  {
+    document_id: "20",
+    document_no: "INV-2024-020",
+    document_type: "Invoice",
+    description: "ค่าลิขสิทธิ์ซอฟต์แวร์ ERP",
+    current_status: "Verified",
+    created_by: "Bob Smith",
+    created_at: "2024-01-15 11:30",
+    owner: "Accountant Dept",
+  },
+  {
+    document_id: "21",
+    document_no: "PO-2024-021",
+    document_type: "Purchase Order",
+    description: "เก้าอี้ออฟฟิศใหม่ 2 ตัว",
+    current_status: "Draft",
+    created_by: "John Doe",
+    created_at: "2024-01-16 10:00",
+    owner: "User",
+  },
+];
+
+/**
+ * UI HELPERS
+ */
+const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
+  const config = STATUS_CONFIG[status] || {
+    label: status,
+    color: "bg-gray-100 text-gray-600 border-gray-200",
+  };
+  return (
+    <span
+      className={`px-2.5 py-0.5 rounded-full text-[10px] md:text-xs font-medium border ${config.color}`}
+    >
+      {config.label}
+    </span>
+  );
+};
+
+const StepProgress: React.FC<{ currentStatus: string; stages: string[] }> = ({
+  currentStatus,
+  stages,
+}) => {
+  const mainStages = [
+    { key: "Draft" },
+    { key: "Review" },
+    { key: "Approval" },
+    { key: "Accounting" },
+    { key: "Payment" },
+    { key: "Completed" },
+  ];
+  const currentIdx = stages.indexOf(currentStatus);
+
+  return (
+    <div className="w-full py-8 overflow-x-auto">
+      <div className="flex items-center min-w-[700px] px-4">
+        {mainStages.map((stage, index) => {
+          const stageIdxInFull = stages.indexOf(stage.key);
+          const isActive =
+            currentIdx >= stageIdxInFull && stageIdxInFull !== -1;
+          const label = STATUS_CONFIG[stage.key]?.label || stage.key;
+
+          return (
+            <React.Fragment key={stage.key}>
+              <div className="flex flex-col items-center relative flex-1">
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center z-10 border-2 transition-all duration-500
+                  ${
+                    isActive
+                      ? "bg-blue-600 border-blue-600 text-white shadow-md"
+                      : "bg-white border-gray-200 text-gray-400"
+                  }`}
+                >
+                  {isActive ? (
+                    <CheckCircle2 size={18} />
+                  ) : (
+                    <span>{index + 1}</span>
+                  )}
+                </div>
+                <span
+                  className={`absolute -bottom-6 text-[10px] font-bold whitespace-nowrap transition-colors duration-500
+                  ${isActive ? "text-blue-600" : "text-gray-400"}`}
+                >
+                  {label}
+                </span>
+              </div>
+              {index < mainStages.length - 1 && (
+                <div className="flex-1 h-0.5 mx-[-15px] z-0 bg-gray-200 relative">
+                  <div
+                    className="absolute inset-0 bg-blue-600 transition-all duration-700 ease-in-out"
+                    style={{
+                      width:
+                        currentIdx >= stages.indexOf(mainStages[index + 1].key)
+                          ? "100%"
+                          : isActive
+                          ? "50%"
+                          : "0%",
+                    }}
+                  />
+                </div>
+              )}
+            </React.Fragment>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+/**
+ * PAGE: DASHBOARD
+ */
+interface DashboardProps {
+  documents: IDocument[];
+  setView: (v: string) => void;
+  setSelectedDocId: (id: string) => void;
+  userRole: Role;
+  stages: string[];
+}
+
+const Dashboard: React.FC<DashboardProps> = ({
+  documents,
+  setView,
+  setSelectedDocId,
+  userRole,
+  stages,
+}) => {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
+
+  const filteredDocs = useMemo(() => {
+    return documents.filter((doc) => {
+      const matchesStatus =
+        statusFilter === "All" || doc.current_status === statusFilter;
+      const matchesSearch =
+        doc.document_no.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        doc.description.toLowerCase().includes(searchTerm.toLowerCase());
+      return matchesStatus && matchesSearch;
+    });
+  }, [documents, statusFilter, searchTerm]);
+
+  const stats = useMemo(
+    () => ({
+      total: documents.length,
+      pending: documents.filter(
+        (d) => !["Completed", "Rejected", "Paid"].includes(d.current_status)
+      ).length,
+      completed: documents.filter((d) => d.current_status === "Completed")
+        .length,
+      rejected: documents.filter((d) => d.current_status === "Rejected").length,
+    }),
+    [documents]
+  );
+
+  const totalPages = Math.ceil(filteredDocs.length / itemsPerPage);
+  const paginatedDocs = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredDocs.slice(start, start + itemsPerPage);
+  }, [filteredDocs, currentPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, statusFilter]);
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black text-gray-900 tracking-tight uppercase">
+            ERP Dashboard
+          </h1>
+          <p className="text-gray-500 text-sm font-medium">
+            ภาพรวมรายการเอกสารและสถานะการอนุมัติ
+          </p>
+        </div>
+        {userRole === "User" && (
+          <button
+            onClick={() => setView("create")}
+            className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold shadow-lg shadow-blue-500/20 flex items-center gap-2 hover:bg-blue-700 transition-all shrink-0 active:scale-95"
+          >
+            <Plus size={18} /> สร้างเอกสารใหม่
+          </button>
+        )}
+      </header>
+
+      {/* สรุปสถิติ */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[
+          {
+            icon: <FileText />,
+            label: "ทั้งหมด",
+            val: stats.total,
+            color: "text-slate-600",
+            bg: "bg-slate-50",
+          },
+          {
+            icon: <Clock />,
+            label: "กำลังดำเนินการ",
+            val: stats.pending,
+            color: "text-blue-600",
+            bg: "bg-blue-50",
+          },
+          {
+            icon: <CheckCircle />,
+            label: "สำเร็จแล้ว",
+            val: stats.completed,
+            color: "text-green-600",
+            bg: "bg-green-50",
+          },
+          {
+            icon: <XCircle />,
+            label: "ตีกลับ",
+            val: stats.rejected,
+            color: "text-red-600",
+            bg: "bg-red-50",
+          },
+        ].map((item, i) => (
+          <div
+            key={i}
+            className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow"
+          >
+            <div className={`p-3 ${item.bg} rounded-xl ${item.color}`}>
+              {item.icon}
+            </div>
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                {item.label}
+              </p>
+              <p className="text-2xl font-black">{item.val}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ค้นหาและตัวกรอง */}
+      <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col md:flex-row gap-4">
+        <div className="relative flex-1 group">
+          <Search
+            size={18}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors"
+          />
+          <input
+            type="text"
+            placeholder="ค้นหาเลขที่เอกสาร หรือรายละเอียด..."
+            value={searchTerm}
+            onChange={(e: ChangeEvent<HTMLInputElement>) =>
+              setSearchTerm(e.target.value)
+            }
+            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-transparent rounded-xl outline-none focus:bg-white focus:border-blue-500 font-medium text-sm transition-all"
+          />
+        </div>
+        <div className="flex items-center gap-3 shrink-0 px-3 py-2 bg-slate-50 rounded-xl border border-transparent focus-within:bg-white focus-within:border-blue-100 transition-all">
+          <Filter size={16} className="text-gray-400" />
+          <select
+            value={statusFilter}
+            onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+              setStatusFilter(e.target.value)
+            }
+            className="bg-transparent border-none outline-none text-sm font-bold text-gray-700 min-w-[150px]"
+          >
+            <option value="All">ทุกสถานะ</option>
+            {stages.map((s) => (
+              <option key={s} value={s}>
+                {STATUS_CONFIG[s]?.label || s}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* ตารางข้อมูล */}
+      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-gray-50/50 border-b border-gray-100 text-gray-400">
+              <tr>
+                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest">
+                  #
+                </th>
+                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest">
+                  เลขที่เอกสาร
+                </th>
+                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest">
+                  ประเภท
+                </th>
+                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest">
+                  วันที่สร้าง
+                </th>
+                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest">
+                  สถานะ
+                </th>
+                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-right">
+                  จัดการ
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {paginatedDocs.map((doc, index) => {
+                const actualIdx =
+                  documents.findIndex(
+                    (d) => d.document_id === doc.document_id
+                  ) + 1;
+                return (
+                  <tr
+                    key={doc.document_id}
+                    className="hover:bg-blue-50/30 group transition-colors"
+                  >
+                    <td className="px-6 py-4 whitespace-nowrap text-xs font-bold text-slate-400">
+                      {actualIdx}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap font-bold text-gray-900 text-sm">
+                      {doc.document_no}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-500 text-sm font-medium">
+                      {doc.document_type}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-400 italic font-medium">
+                      {doc.created_at}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <StatusBadge status={doc.current_status} />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <button
+                        onClick={() => {
+                          setSelectedDocId(doc.document_id);
+                          setView("detail");
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 group-hover:bg-blue-600 group-hover:text-white text-slate-600 rounded-lg font-bold text-xs transition-all"
+                      >
+                        ดูข้อมูล <ArrowUpRight size={14} />
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="bg-gray-50 px-6 py-4 flex items-center justify-between border-t border-gray-100">
+            <div className="text-xs font-bold text-gray-400 uppercase tracking-widest italic">
+              แสดง {paginatedDocs.length} จาก {filteredDocs.length} รายการ
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="p-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-30 transition-all"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <div className="flex items-center gap-1">
+                {[...Array(totalPages)].map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setCurrentPage(i + 1)}
+                    className={`w-8 h-8 rounded-lg text-xs font-black transition-all ${
+                      currentPage === i + 1
+                        ? "bg-blue-600 text-white shadow-md"
+                        : "bg-white border border-gray-200 text-gray-400 hover:border-blue-300"
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() =>
+                  setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                }
+                disabled={currentPage === totalPages}
+                className="p-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-30 transition-all"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/**
+ * ADMIN: STATUS MANAGEMENT (REORDER & EDIT)
+ */
+interface StatusMgmtProps {
+  stages: string[];
+  setStages: (s: string[]) => void;
+}
+
+const StatusManagement: React.FC<StatusMgmtProps> = ({ stages, setStages }) => {
+  const [newStatus, setNewStatus] = useState("");
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [editIndex, setEditIndex] = useState<number | null>(null);
+  const [editValue, setEditValue] = useState("");
+
+  const handleDragStart = (index: number) => setDraggedIndex(index);
+
+  const handleDragEnter = (index: number) => {
+    if (draggedIndex === null || draggedIndex === index || editIndex !== null)
+      return;
+    const newStages = [...stages];
+    const item = newStages.splice(draggedIndex, 1)[0];
+    newStages.splice(index, 0, item);
+    setStages(newStages);
+    setDraggedIndex(index);
+  };
+
+  const handleDragEnd = () => setDraggedIndex(null);
+
+  const startEdit = (index: number, value: string) => {
+    setEditIndex(index);
+    setEditValue(value);
+  };
+
+  const saveEdit = () => {
+    if (editValue.trim() === "") return;
+    const newStages = [...stages];
+    newStages[editIndex!] = editValue;
+    setStages(newStages);
+    setEditIndex(null);
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-500">
+      <header>
+        <h1 className="text-2xl font-black text-gray-900 tracking-tight uppercase">
+          Manage Workflow
+        </h1>
+        <p className="text-gray-500 text-sm font-medium italic">
+          จัดการขั้นตอน: เพิ่ม แก้ไข และลากสลับลำดับสถานะเพื่อกำหนด Flow ของระบบ
+        </p>
+      </header>
+      <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm space-y-4">
+        <div className="flex gap-2 mb-4">
+          <input
+            value={newStatus}
+            onChange={(e: ChangeEvent<HTMLInputElement>) =>
+              setNewStatus(e.target.value)
+            }
+            placeholder="ชื่อสถานะใหม่..."
+            className="flex-1 p-3 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold transition-all"
+          />
+          <button
+            onClick={() => {
+              if (newStatus) {
+                setStages([...stages, newStatus]);
+                setNewStatus("");
+              }
+            }}
+            className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-blue-700 transition-all active:scale-95"
+          >
+            <Plus size={18} /> เพิ่ม
+          </button>
+        </div>
+        <div className="space-y-2">
+          {stages.map((stage, index) => {
+            const isDragging = draggedIndex === index;
+            const isEditing = editIndex === index;
+            const label = STATUS_CONFIG[stage]?.label || stage;
+
+            return (
+              <div
+                key={stage}
+                draggable={!isEditing}
+                onDragStart={() => handleDragStart(index)}
+                onDragEnter={() => handleDragEnter(index)}
+                onDragEnd={handleDragEnd}
+                onDragOver={(e) => e.preventDefault()}
+                className={`flex items-center justify-between p-4 border-2 rounded-2xl transition-all ${
+                  !isEditing ? "cursor-move" : ""
+                }
+                  ${
+                    isDragging
+                      ? "opacity-30 scale-95 border-blue-500 bg-blue-50 shadow-inner"
+                      : "bg-gray-50 border-gray-100 hover:border-blue-300 hover:bg-white"
+                  }
+                `}
+              >
+                <div className="flex items-center gap-4 flex-1">
+                  {!isEditing && (
+                    <GripVertical
+                      size={18}
+                      className={`${
+                        isDragging ? "text-blue-500" : "text-gray-300"
+                      }`}
+                    />
+                  )}
+                  <span className="w-6 h-6 flex items-center justify-center bg-gray-200 rounded-lg text-[10px] font-black text-gray-500 shrink-0">
+                    {index + 1}
+                  </span>
+
+                  {isEditing ? (
+                    <input
+                      autoFocus
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && saveEdit()}
+                      className="flex-1 p-1 px-3 border border-blue-500 rounded-lg outline-none font-bold bg-white"
+                    />
+                  ) : (
+                    <span
+                      className={`font-bold ${
+                        isDragging ? "text-blue-600" : "text-gray-700"
+                      }`}
+                    >
+                      {label}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 ml-4 shrink-0">
+                  {isEditing ? (
+                    <>
+                      <button
+                        onClick={saveEdit}
+                        className="p-2 bg-green-500 text-white rounded-lg hover:bg-green-600 shadow-sm transition-all"
+                      >
+                        <Save size={16} />
+                      </button>
+                      <button
+                        onClick={() => setEditIndex(null)}
+                        className="p-2 bg-gray-400 text-white rounded-lg hover:bg-gray-500 shadow-sm transition-all"
+                      >
+                        <X size={16} />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => startEdit(index, stage)}
+                        className="text-gray-400 hover:text-blue-500 p-1.5 rounded-lg hover:bg-blue-50 transition-all"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                      {!["Draft", "Completed"].includes(stage) && (
+                        <button
+                          onClick={() =>
+                            setStages(stages.filter((s) => s !== stage))
+                          }
+                          className="text-gray-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50 transition-all"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * ADMIN: TYPE MANAGEMENT
+ */
+interface TypeMgmtProps {
+  docTypes: string[];
+  setDocTypes: (t: string[]) => void;
+}
+
+const TypeManagement: React.FC<TypeMgmtProps> = ({ docTypes, setDocTypes }) => {
+  const [newType, setNewType] = useState("");
+  const [editIndex, setEditIndex] = useState<number | null>(null);
+  const [editValue, setEditValue] = useState("");
+
+  const startEdit = (index: number, value: string) => {
+    setEditIndex(index);
+    setEditValue(value);
+  };
+
+  const saveEdit = () => {
+    if (editValue.trim() === "") return;
+    const newTypes = [...docTypes];
+    newTypes[editIndex!] = editValue;
+    setDocTypes(newTypes);
+    setEditIndex(null);
+  };
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-500 text-sm">
+      <header>
+        <h1 className="text-2xl font-black text-gray-900 tracking-tight uppercase">
+          Manage Types
+        </h1>
+        <p className="text-gray-500 font-medium italic text-xs">
+          กำหนดและแก้ไขประเภทเอกสารที่มีในระบบ
+        </p>
+      </header>
+      <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
+        <div className="flex gap-2 mb-6">
+          <input
+            value={newType}
+            onChange={(e: ChangeEvent<HTMLInputElement>) =>
+              setNewType(e.target.value)
+            }
+            placeholder="เช่น Reimbursement..."
+            className="flex-1 p-3 bg-gray-50 border border-gray-100 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-bold transition-all"
+          />
+          <button
+            onClick={() => {
+              if (newType) {
+                setDocTypes([...docTypes, newType]);
+                setNewType("");
+              }
+            }}
+            className="bg-blue-600 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-blue-700 transition-all active:scale-95 shrink-0"
+          >
+            <Plus size={18} /> เพิ่ม
+          </button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {docTypes.map((type, index) => {
+            const isEditing = editIndex === index;
+            return (
+              <div
+                key={index}
+                className="flex items-center justify-between p-4 bg-gray-50 border border-gray-100 rounded-2xl group transition-all hover:border-blue-300"
+              >
+                <div className="flex items-center gap-3 font-bold text-gray-700 flex-1">
+                  <Files size={18} className="text-blue-500 shrink-0" />
+                  {isEditing ? (
+                    <input
+                      autoFocus
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && saveEdit()}
+                      className="flex-1 p-1 px-2 border border-blue-500 rounded-lg outline-none bg-white font-bold"
+                    />
+                  ) : (
+                    <span>{type}</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 ml-4">
+                  {isEditing ? (
+                    <>
+                      <button
+                        onClick={saveEdit}
+                        className="text-green-600 hover:bg-green-100 p-1.5 rounded-lg transition-all"
+                      >
+                        <Save size={16} />
+                      </button>
+                      <button
+                        onClick={() => setEditIndex(null)}
+                        className="text-gray-500 hover:bg-gray-200 p-1.5 rounded-lg transition-all"
+                      >
+                        <X size={16} />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => startEdit(index, type)}
+                        className="text-gray-400 hover:text-blue-500 p-1.5 rounded-lg hover:bg-blue-50 transition-all"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                      <button
+                        onClick={() =>
+                          setDocTypes(docTypes.filter((_, i) => i !== index))
+                        }
+                        className="text-gray-400 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50 transition-all"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * MAIN APP COMPONENT
+ */
+export default function App() {
+  const [view, setView] = useState("dashboard");
+  const [userRole, setUserRole] = useState<Role>("User");
+  const [documents, setDocuments] = useState<IDocument[]>(INITIAL_DOCUMENTS);
+  const [history, setHistory] = useState<IHistory[]>([]);
+  const [stages, setStages] = useState<string[]>(INITIAL_STAGES);
+  const [docTypes, setDocTypes] = useState<string[]>(INITIAL_TYPES);
+  const [users] = useState<IUser[]>(INITIAL_USERS);
+  const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
+  const [isSidebarOpen, setSidebarOpen] = useState(false);
+
+  // Workflow Action Handler
+  const handleUpdateStatus = (
+    id: string,
+    newStatus: string,
+    comment: string
+  ) => {
+    const timestamp = new Date()
+      .toLocaleString("th-TH")
+      .substring(0, 16)
+      .replace(",", "");
+    const currentDoc = documents.find((d) => d.document_id === id);
+    if (!currentDoc) return;
+
+    setDocuments((docs) =>
+      docs.map((d) => {
+        if (d.document_id === id) {
+          let nextOwner = "System";
+          if (["Draft", "Rejected"].includes(newStatus)) nextOwner = "User";
+          else if (
+            [
+              "Submitted",
+              "Review",
+              "Verified",
+              "Accounting",
+              "Posted",
+              "Payment",
+              "Paid",
+              "Failed",
+            ].includes(newStatus)
+          )
+            nextOwner = "Accountant Dept";
+          else if (["Approval", "Approved"].includes(newStatus))
+            nextOwner = "Management";
+          else if (newStatus === "Completed") nextOwner = "Archive";
+          return { ...d, current_status: newStatus, owner: nextOwner };
+        }
+        return d;
+      })
+    );
+
+    setHistory([
+      {
+        id: Math.random().toString(36).substr(2, 9),
+        document_id: id,
+        from_status: currentDoc.current_status,
+        to_status: newStatus,
+        action: `เปลี่ยนสถานะเป็น ${
+          STATUS_CONFIG[newStatus]?.label || newStatus
+        }`,
+        action_by: `${userRole} User`,
+        action_at: timestamp,
+        comment: comment,
+      },
+      ...history,
+    ]);
+  };
+
+  const selectedDoc = documents.find((d) => d.document_id === selectedDocId);
+
+  // Logic สำหรับปุ่ม Action
+  const canUserAction = useMemo(() => {
+    if (!selectedDoc) return false;
+    const s = selectedDoc.current_status;
+    if (userRole === "User" && ["Draft", "Rejected"].includes(s)) return true;
+    if (
+      userRole === "Accountant" &&
+      [
+        "Submitted",
+        "Review",
+        "Verified",
+        "Approved",
+        "Accounting",
+        "Posted",
+        "Payment",
+        "Paid",
+        "Failed",
+      ].includes(s)
+    )
+      return true;
+    if (userRole === "Manager" && s === "Approval") return true;
+    return false;
+  }, [selectedDoc, userRole]);
+
+  return (
+    <div className="flex h-screen bg-gray-50 text-gray-900 overflow-hidden font-sans text-sm md:text-base">
+      {/* Mobile Sidebar Overlay */}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar Navigation */}
+      <aside
+        className={`fixed lg:static inset-y-0 left-0 w-72 bg-slate-900 text-white z-50 transition-transform duration-500 transform ${
+          isSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        } flex flex-col h-full shrink-0 shadow-2xl`}
+      >
+        <div className="p-8 border-b border-slate-800 flex items-center gap-4 shrink-0">
+          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center font-black text-xl shadow-lg">
+            M
+          </div>
+          <div>
+            <span className="font-black text-xl tracking-tighter uppercase">
+              Mini ERP
+            </span>
+            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+              Finance Management
+            </p>
+          </div>
+        </div>
+
+        <nav className="flex-1 overflow-y-auto p-6 space-y-2 custom-scrollbar">
+          <button
+            onClick={() => {
+              setView("dashboard");
+              setSidebarOpen(false);
+            }}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-bold text-sm ${
+              view === "dashboard"
+                ? "bg-blue-600 text-white shadow-lg"
+                : "text-slate-400 hover:bg-slate-800"
+            }`}
+          >
+            <LayoutDashboard size={20} /> Dashboard
+          </button>
+
+          {userRole === "User" && (
+            <button
+              onClick={() => {
+                setView("create");
+                setSidebarOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-bold text-sm ${
+                view === "create"
+                  ? "bg-blue-600 text-white shadow-lg"
+                  : "text-slate-400 hover:bg-slate-800"
+              }`}
+            >
+              <FilePlus size={20} /> สร้างเอกสารใหม่
+            </button>
+          )}
+
+          {userRole === "Admin" && (
+            <div className="pt-6 space-y-2">
+              <div className="px-4 text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">
+                Admin Config
+              </div>
+              <button
+                onClick={() => {
+                  setView("status_mgmt");
+                  setSidebarOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${
+                  view === "status_mgmt"
+                    ? "bg-blue-600 text-white shadow-lg"
+                    : "text-slate-400 hover:bg-slate-800"
+                }`}
+              >
+                <Settings size={20} /> จัดการสถานะ
+              </button>
+              <button
+                onClick={() => {
+                  setView("type_mgmt");
+                  setSidebarOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${
+                  view === "type_mgmt"
+                    ? "bg-blue-600 text-white shadow-lg"
+                    : "text-slate-400 hover:bg-slate-800"
+                }`}
+              >
+                <Files size={20} /> จัดการประเภท
+              </button>
+              <button
+                onClick={() => {
+                  setView("user_mgmt");
+                  setSidebarOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${
+                  view === "user_mgmt"
+                    ? "bg-blue-600 text-white shadow-lg"
+                    : "text-slate-400 hover:bg-slate-800"
+                }`}
+              >
+                <Users size={20} /> รายชื่อพนักงาน
+              </button>
+            </div>
+          )}
+        </nav>
+
+        <div className="shrink-0 p-6 border-t border-slate-800 bg-slate-900 mt-auto shadow-2xl">
+          <p className="text-[10px] text-slate-500 uppercase font-black mb-3 text-center italic tracking-widest">
+            Role Simulator
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {(["User", "Accountant", "Manager", "Admin"] as Role[]).map((r) => (
+              <button
+                key={r}
+                onClick={() => {
+                  setUserRole(r);
+                  setView("dashboard");
+                }}
+                className={`text-[10px] py-2 rounded-lg font-black border transition-all ${
+                  userRole === r
+                    ? "bg-blue-600 border-blue-500 text-white shadow-md"
+                    : "border-slate-700 text-slate-500 hover:border-slate-500"
+                }`}
+              >
+                {r.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        </div>
+      </aside>
+
+      {/* Main Container */}
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+        <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between px-8 shrink-0">
+          <div className="flex items-center gap-4">
+            <button
+              className="lg:hidden p-2 hover:bg-slate-50 rounded-xl transition-colors"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <Menu size={24} />
+            </button>
+            <div className="hidden md:flex items-center gap-3 px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold text-slate-600 tracking-tighter uppercase">
+              {userRole === "Admin" ? (
+                <ShieldCheck size={18} className="text-red-500" />
+              ) : (
+                <UserCircle size={18} className="text-blue-500" />
+              )}
+              {userRole} Mode
+            </div>
+          </div>
+          <div className="text-sm font-bold text-slate-400 flex items-center gap-2 tracking-tight">
+            <Calendar size={16} /> {new Date().toLocaleDateString("th-TH")}
+          </div>
+        </header>
+
+        <main className="flex-1 overflow-y-auto p-6 md:p-10 scroll-smooth custom-scrollbar">
+          <div className="max-w-6xl mx-auto pb-20">
+            {view === "dashboard" && (
+              <Dashboard
+                documents={documents}
+                setView={setView}
+                setSelectedDocId={setSelectedDocId}
+                userRole={userRole}
+                stages={stages}
+              />
+            )}
+            {view === "status_mgmt" && (
+              <StatusManagement stages={stages} setStages={setStages} />
+            )}
+            {view === "type_mgmt" && (
+              <TypeManagement docTypes={docTypes} setDocTypes={setDocTypes} />
+            )}
+
+            {view === "user_mgmt" && (
+              <div className="space-y-6 animate-in fade-in duration-500">
+                <header>
+                  <h1 className="text-2xl font-black text-gray-900 tracking-tight uppercase">
+                    Users List
+                  </h1>
+                  <p className="text-gray-500 text-sm font-medium italic text-xs">
+                    รายชื่อพนักงานที่มีสิทธิ์ใช้งานระบบ
+                  </p>
+                </header>
+                <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden text-sm">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-gray-50/50 border-b border-gray-100 text-gray-400">
+                      <tr>
+                        <th className="px-6 py-4 text-[10px] font-black uppercase">
+                          ชื่อ - นามสกุล
+                        </th>
+                        <th className="px-6 py-4 text-[10px] font-black uppercase">
+                          อีเมล
+                        </th>
+                        <th className="px-6 py-4 text-[10px] font-black uppercase">
+                          บทบาท
+                        </th>
+                        <th className="px-6 py-4 text-[10px] font-black uppercase">
+                          แผนก
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {users.map((u) => (
+                        <tr
+                          key={u.id}
+                          className="hover:bg-gray-50 transition-colors group"
+                        >
+                          <td className="px-6 py-4 whitespace-nowrap font-bold text-gray-900">
+                            {u.name}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-gray-500">
+                            {u.email}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span
+                              className={`px-2 py-0.5 rounded-lg text-[10px] font-bold ${
+                                u.role === "Admin"
+                                  ? "bg-red-100 text-red-600"
+                                  : "bg-blue-100 text-blue-600"
+                              }`}
+                            >
+                              {u.role}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">
+                            {u.department}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {view === "create" && userRole === "User" && (
+              <div className="max-w-2xl mx-auto space-y-8 animate-in slide-in-from-bottom-4 duration-500">
+                <header>
+                  <h1 className="text-3xl font-black text-gray-900 tracking-tight">
+                    สร้างเอกสารใหม่
+                  </h1>
+                  <p className="text-gray-500 font-medium">
+                    ระบุเลขที่และรายละเอียดเพื่อเริ่ม Workflow การตรวจสอบ
+                  </p>
+                </header>
+                <form
+                  onSubmit={(e: FormEvent<HTMLFormElement>) => {
+                    e.preventDefault();
+                    const formData = new FormData(e.currentTarget);
+                    const newDoc: IDocument = {
+                      document_id: Math.random().toString(36).substr(2, 9),
+                      document_no: formData.get("docNo") as string,
+                      document_type: formData.get("type") as string,
+                      description: formData.get("desc") as string,
+                      current_status: "Draft",
+                      created_by: "Current User",
+                      created_at: new Date()
+                        .toLocaleString("th-TH")
+                        .substring(0, 16)
+                        .replace(",", ""),
+                      owner: "User",
+                    };
+                    setDocuments([newDoc, ...documents]);
+                    setView("dashboard");
+                  }}
+                  className="bg-white p-10 rounded-3xl border border-gray-100 shadow-xl space-y-6"
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                        เลขที่เอกสาร
+                      </label>
+                      <input
+                        name="docNo"
+                        required
+                        className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-4 focus:ring-blue-500/10 font-bold transition-all"
+                        placeholder="เช่น INV-2024-001"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                        ประเภท
+                      </label>
+                      <select
+                        name="type"
+                        className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-4 focus:ring-blue-500/10 font-bold transition-all"
+                      >
+                        {docTypes.map((t) => (
+                          <option key={t}>{t}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                      รายละเอียดเหตุผล
+                    </label>
+                    <textarea
+                      name="desc"
+                      required
+                      rows="4"
+                      className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-4 focus:ring-blue-500/10 font-bold resize-none transition-all"
+                      placeholder="ระบุวัตถุประสงค์ในการเบิกจ่าย..."
+                    />
+                  </div>
+                  <div className="flex gap-4 pt-4">
+                    <button
+                      type="submit"
+                      className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-black shadow-lg shadow-blue-500/20 active:scale-95 transition-all"
+                    >
+                      เริ่มร่างเอกสาร (Draft)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setView("dashboard")}
+                      className="px-8 text-slate-400 font-bold hover:text-slate-900 transition-colors"
+                    >
+                      ยกเลิก
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {view === "detail" && selectedDoc && (
+              <div className="space-y-8 animate-in fade-in duration-500 text-sm">
+                <button
+                  onClick={() => setView("dashboard")}
+                  className="flex items-center gap-2 text-gray-400 hover:text-gray-900 font-bold transition-all group"
+                >
+                  <ArrowLeft
+                    size={18}
+                    className="group-hover:-translate-x-1 transition-transform"
+                  />{" "}
+                  กลับหน้า Dashboard
+                </button>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  <div className="lg:col-span-2 space-y-8">
+                    {/* ข้อมูลหัวเอกสาร */}
+                    <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm relative overflow-hidden">
+                      <div className="absolute top-0 left-0 w-2 h-full bg-blue-600" />
+                      <div className="flex flex-col md:flex-row justify-between items-start gap-4 mb-8">
+                        <div>
+                          <div className="flex items-center gap-4 mb-2">
+                            <h1 className="text-3xl font-black text-slate-900 tracking-tighter">
+                              {selectedDoc.document_no}
+                            </h1>
+                            <StatusBadge status={selectedDoc.current_status} />
+                          </div>
+                          <p className="text-gray-500 font-medium">
+                            {selectedDoc.description}
+                          </p>
+                          <div className="mt-4 flex gap-6 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+                            <span className="flex items-center gap-1 font-black">
+                              <UserCircle size={14} /> โดย:{" "}
+                              {selectedDoc.created_by}
+                            </span>
+                            <span className="flex items-center gap-1 font-black">
+                              <Calendar size={14} /> วันที่:{" "}
+                              {selectedDoc.created_at}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="bg-blue-50 p-4 rounded-2xl text-right shrink-0 border border-blue-100 shadow-sm">
+                          <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">
+                            ผู้รับผิดชอบปัจจุบัน
+                          </p>
+                          <p className="text-blue-600 font-black">
+                            {selectedDoc.owner}
+                          </p>
+                        </div>
+                      </div>
+                      <StepProgress
+                        currentStatus={selectedDoc.current_status}
+                        stages={stages}
+                      />
+                    </div>
+
+                    {/* Timeline */}
+                    <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
+                      <h2 className="text-lg font-black text-slate-800 mb-8 flex items-center gap-3 tracking-tight uppercase">
+                        <HistoryIcon size={20} className="text-blue-500" />{" "}
+                        Workflow Audit Trail
+                      </h2>
+                      <div className="space-y-0 ml-4">
+                        {history
+                          .filter(
+                            (h) => h.document_id === selectedDoc.document_id
+                          )
+                          .map((h, i) => (
+                            <div
+                              key={h.id}
+                              className="relative pl-10 pb-10 border-l-2 border-slate-100 last:border-none last:pb-0"
+                            >
+                              <div
+                                className={`absolute -left-[11px] top-0 w-5 h-5 rounded-full border-4 border-white shadow-sm transition-all ${
+                                  i === 0
+                                    ? "bg-blue-600 ring-4 ring-blue-50"
+                                    : "bg-slate-300"
+                                }`}
+                              />
+                              <div className="flex justify-between mb-1">
+                                <span className="font-black text-slate-800 text-sm tracking-tight">
+                                  {h.action}
+                                </span>
+                                <span className="text-slate-400 text-[10px] font-bold uppercase">
+                                  {h.action_at}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 mb-3">
+                                <span className="text-xs font-bold text-slate-500 tracking-tight">
+                                  โดย {h.action_by}
+                                </span>
+                                <ChevronRight
+                                  size={12}
+                                  className="text-slate-300"
+                                />
+                                <StatusBadge status={h.to_status} />
+                              </div>
+                              {h.comment && (
+                                <div className="p-4 bg-slate-50 rounded-2xl text-xs text-slate-600 italic font-medium border border-slate-100 shadow-sm">
+                                  "{h.comment}"
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        {history.filter(
+                          (h) => h.document_id === selectedDoc.document_id
+                        ).length === 0 && (
+                          <p className="text-slate-400 italic text-xs ml-4">
+                            ยังไม่มีประวัติการดำเนินการ
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* แถบการดำเนินการ */}
+                  <div className="space-y-6">
+                    <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-xl shadow-blue-900/5 sticky top-8">
+                      <h3 className="font-black text-slate-900 mb-6 uppercase tracking-wider text-sm flex items-center gap-2">
+                        <ShieldCheck size={18} className="text-blue-500" />{" "}
+                        Action Controls
+                      </h3>
+                      {selectedDoc.current_status !== "Completed" &&
+                      canUserAction ? (
+                        <div className="space-y-4">
+                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                            <MessageSquare size={12} /> หมายเหตุ (Comment)
+                          </label>
+                          <textarea
+                            id="actComment"
+                            placeholder="ระบุเหตุผลหรือข้อความเพิ่มเติม..."
+                            className="w-full h-24 p-3 text-xs border border-gray-100 rounded-2xl outline-none bg-slate-50 focus:ring-4 focus:ring-blue-500/10 font-medium resize-none transition-all"
+                          />
+                          <div className="space-y-3 pt-4 border-t border-slate-50">
+                            {userRole === "User" &&
+                              (selectedDoc.current_status === "Draft" ||
+                                selectedDoc.current_status === "Rejected") && (
+                                <button
+                                  onClick={() =>
+                                    handleUpdateStatus(
+                                      selectedDoc.document_id,
+                                      "Submitted",
+                                      (
+                                        document.getElementById(
+                                          "actComment"
+                                        ) as HTMLTextAreaElement
+                                      ).value
+                                    )
+                                  }
+                                  className="w-full bg-blue-600 text-white py-3.5 rounded-xl font-black shadow-lg shadow-blue-500/20 active:scale-95 transition-all text-xs"
+                                >
+                                  ส่งตรวจสอบ (Submit)
+                                </button>
+                              )}
+                            {userRole === "Accountant" &&
+                              selectedDoc.current_status === "Submitted" && (
+                                <button
+                                  onClick={() =>
+                                    handleUpdateStatus(
+                                      selectedDoc.document_id,
+                                      "Review",
+                                      (
+                                        document.getElementById(
+                                          "actComment"
+                                        ) as HTMLTextAreaElement
+                                      ).value
+                                    )
+                                  }
+                                  className="w-full bg-yellow-500 text-white py-3.5 rounded-xl font-black active:scale-95 transition-all text-xs"
+                                >
+                                  รับเรื่องตรวจสอบ (Review)
+                                </button>
+                              )}
+                            {userRole === "Accountant" &&
+                              selectedDoc.current_status === "Review" && (
+                                <button
+                                  onClick={() =>
+                                    handleUpdateStatus(
+                                      selectedDoc.document_id,
+                                      "Verified",
+                                      (
+                                        document.getElementById(
+                                          "actComment"
+                                        ) as HTMLTextAreaElement
+                                      ).value
+                                    )
+                                  }
+                                  className="w-full bg-cyan-600 text-white py-3.5 rounded-xl font-black active:scale-95 transition-all text-xs font-black"
+                                >
+                                  ตรวจผ่าน (Verify)
+                                </button>
+                              )}
+                            {userRole === "Accountant" &&
+                              selectedDoc.current_status === "Verified" && (
+                                <button
+                                  onClick={() =>
+                                    handleUpdateStatus(
+                                      selectedDoc.document_id,
+                                      "Approval",
+                                      (
+                                        document.getElementById(
+                                          "actComment"
+                                        ) as HTMLTextAreaElement
+                                      ).value
+                                    )
+                                  }
+                                  className="w-full bg-orange-500 text-white py-3.5 rounded-xl font-black active:scale-95 transition-all text-xs"
+                                >
+                                  ส่งขออนุมัติ (Pending Approval)
+                                </button>
+                              )}
+                            {userRole === "Manager" &&
+                              selectedDoc.current_status === "Approval" && (
+                                <button
+                                  onClick={() =>
+                                    handleUpdateStatus(
+                                      selectedDoc.document_id,
+                                      "Approved",
+                                      (
+                                        document.getElementById(
+                                          "actComment"
+                                        ) as HTMLTextAreaElement
+                                      ).value
+                                    )
+                                  }
+                                  className="w-full bg-emerald-600 text-white py-3.5 rounded-xl font-black shadow-lg active:scale-95 transition-all text-xs"
+                                >
+                                  อนุมัติเอกสาร (Approve)
+                                </button>
+                              )}
+                            {userRole === "Accountant" &&
+                              selectedDoc.current_status === "Approved" && (
+                                <button
+                                  onClick={() =>
+                                    handleUpdateStatus(
+                                      selectedDoc.document_id,
+                                      "Accounting",
+                                      (
+                                        document.getElementById(
+                                          "actComment"
+                                        ) as HTMLTextAreaElement
+                                      ).value
+                                    )
+                                  }
+                                  className="w-full bg-indigo-600 text-white py-3.5 rounded-xl font-black active:scale-95 transition-all text-xs"
+                                >
+                                  รับงานลงบัญชี
+                                </button>
+                              )}
+                            {userRole === "Accountant" &&
+                              selectedDoc.current_status === "Accounting" && (
+                                <button
+                                  onClick={() =>
+                                    handleUpdateStatus(
+                                      selectedDoc.document_id,
+                                      "Posted",
+                                      (
+                                        document.getElementById(
+                                          "actComment"
+                                        ) as HTMLTextAreaElement
+                                      ).value
+                                    )
+                                  }
+                                  className="w-full bg-violet-600 text-white py-3.5 rounded-xl font-black active:scale-95 transition-all text-xs"
+                                >
+                                  ลงรายการบัญชี (Post)
+                                </button>
+                              )}
+                            {userRole === "Accountant" &&
+                              selectedDoc.current_status === "Posted" && (
+                                <button
+                                  onClick={() =>
+                                    handleUpdateStatus(
+                                      selectedDoc.document_id,
+                                      "Payment",
+                                      (
+                                        document.getElementById(
+                                          "actComment"
+                                        ) as HTMLTextAreaElement
+                                      ).value
+                                    )
+                                  }
+                                  className="w-full bg-purple-600 text-white py-3.5 rounded-xl font-black active:scale-95 transition-all text-xs uppercase tracking-tighter"
+                                >
+                                  เตรียมจ่ายเงิน (Payment)
+                                </button>
+                              )}
+                            {userRole === "Accountant" &&
+                              selectedDoc.current_status === "Payment" && (
+                                <button
+                                  onClick={() =>
+                                    handleUpdateStatus(
+                                      selectedDoc.document_id,
+                                      "Paid",
+                                      (
+                                        document.getElementById(
+                                          "actComment"
+                                        ) as HTMLTextAreaElement
+                                      ).value
+                                    )
+                                  }
+                                  className="w-full bg-green-600 text-white py-3.5 rounded-xl font-black active:scale-95 transition-all text-xs"
+                                >
+                                  ยืนยันจ่ายแล้ว (Paid)
+                                </button>
+                              )}
+                            {userRole === "Accountant" &&
+                              (selectedDoc.current_status === "Paid" ||
+                                selectedDoc.current_status === "Failed") && (
+                                <button
+                                  onClick={() =>
+                                    handleUpdateStatus(
+                                      selectedDoc.document_id,
+                                      "Completed",
+                                      (
+                                        document.getElementById(
+                                          "actComment"
+                                        ) as HTMLTextAreaElement
+                                      ).value
+                                    )
+                                  }
+                                  className="w-full bg-slate-800 text-white py-3.5 rounded-xl font-black flex items-center justify-center gap-2 active:scale-95 transition-all text-xs"
+                                >
+                                  จัดเก็บเอกสาร <Archive size={16} />
+                                </button>
+                              )}
+                            {["Accountant", "Manager"].includes(userRole) &&
+                              ![
+                                "Draft",
+                                "Rejected",
+                                "Completed",
+                                "Paid",
+                              ].includes(selectedDoc.current_status) && (
+                                <button
+                                  onClick={() =>
+                                    handleUpdateStatus(
+                                      selectedDoc.document_id,
+                                      "Rejected",
+                                      (
+                                        document.getElementById(
+                                          "actComment"
+                                        ) as HTMLTextAreaElement
+                                      ).value
+                                    )
+                                  }
+                                  className="w-full bg-red-100 text-red-600 py-3.5 rounded-xl font-black hover:bg-red-200 transition-all text-xs uppercase"
+                                >
+                                  ตีกลับ (Reject)
+                                </button>
+                              )}
+                            <p className="text-[10px] text-slate-400 text-center font-black uppercase italic mt-4 pt-3 border-t border-slate-50">
+                              Role: {userRole}
+                            </p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-8 bg-slate-50 rounded-2xl text-center border border-dashed border-slate-200 shadow-inner">
+                          {selectedDoc.current_status === "Completed" ? (
+                            <>
+                              <CheckCircle2
+                                size={40}
+                                className="text-green-500 mx-auto mb-3"
+                              />
+                              <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest text-green-600">
+                                เอกสารเสร็จสมบูรณ์
+                              </p>
+                            </>
+                          ) : (
+                            <>
+                              <ShieldCheck
+                                size={40}
+                                className="text-slate-300 mx-auto mb-3"
+                              />
+                              <p className="text-[10px] text-slate-400 font-black uppercase leading-relaxed whitespace-pre-line">
+                                {userRole === "Admin"
+                                  ? "Admin Mode\n(ViewOnly)"
+                                  : `รอการดำเนินการจากฝ่ายอื่น\n(ปัจจุบัน: ${selectedDoc.owner})`}
+                              </p>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </main>
+      </div>
+
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 0px; background: transparent; }
+        .custom-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      `}</style>
+    </div>
+  );
+}

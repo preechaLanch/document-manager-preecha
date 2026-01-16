@@ -1,0 +1,802 @@
+import React, { useState, useMemo } from "react";
+import type { FormEvent } from "react";
+import {
+  LayoutDashboard,
+  FilePlus,
+  Menu,
+  Settings,
+  Users,
+  ShieldCheck,
+  UserCircle,
+  Calendar,
+  ArrowLeft,
+  MessageSquare,
+  HistoryIcon,
+  CheckCircle2,
+} from "lucide-react";
+import type { IDocument, IHistory, Role } from "./types";
+import {
+  STATUS_CONFIG,
+  INITIAL_DOCUMENTS,
+  INITIAL_STAGES,
+  INITIAL_TYPES,
+  INITIAL_USERS,
+} from "./constants/config";
+import StatusBadge from "./components/StatusBadge";
+import StepProgress from "./components/StepProgress";
+import Dashboard from "./components/Dashboard";
+import StatusManagement from "./components/StatusManagement";
+import TypeManagement from "./components/TypeManagement";
+
+export default function App() {
+  const [view, setView] = useState("dashboard");
+  const [userRole, setUserRole] = useState<Role>("User");
+  const [documents, setDocuments] = useState<IDocument[]>(INITIAL_DOCUMENTS);
+  const [history, setHistory] = useState<IHistory[]>([]);
+  const [stages, setStages] = useState<string[]>(INITIAL_STAGES);
+  const [docTypes, setDocTypes] = useState<string[]>(INITIAL_TYPES);
+  const [users] = useState(INITIAL_USERS);
+  const [selectedDocId, setSelectedDocId] = useState<string | null>(null);
+  const [isSidebarOpen, setSidebarOpen] = useState(false);
+
+  // Workflow Action Handler
+  const handleUpdateStatus = (
+    id: string,
+    newStatus: string,
+    comment: string
+  ) => {
+    const timestamp = new Date()
+      .toLocaleString("th-TH")
+      .substring(0, 16)
+      .replace(",", "");
+    const currentDoc = documents.find((d) => d.document_id === id);
+    if (!currentDoc) return;
+
+    setDocuments((docs) =>
+      docs.map((d) => {
+        if (d.document_id === id) {
+          let nextOwner = "System";
+          if (["Draft", "Rejected"].includes(newStatus)) nextOwner = "User";
+          else if (
+            [
+              "Submitted",
+              "Review",
+              "Verified",
+              "Accounting",
+              "Posted",
+              "Payment",
+              "Paid",
+              "Failed",
+            ].includes(newStatus)
+          )
+            nextOwner = "Accountant Dept";
+          else if (["Approval", "Approved"].includes(newStatus))
+            nextOwner = "Management";
+          else if (newStatus === "Completed") nextOwner = "Archive";
+          return { ...d, current_status: newStatus, owner: nextOwner };
+        }
+        return d;
+      })
+    );
+
+    setHistory([
+      {
+        id: Math.random().toString(36).substr(2, 9),
+        document_id: id,
+        from_status: currentDoc.current_status,
+        to_status: newStatus,
+        action: `เปลี่ยนสถานะเป็น ${
+          STATUS_CONFIG[newStatus]?.label || newStatus
+        }`,
+        action_by: `${userRole} User`,
+        action_at: timestamp,
+        comment: comment,
+      },
+      ...history,
+    ]);
+  };
+
+  const selectedDoc = documents.find((d) => d.document_id === selectedDocId);
+
+  const canUserAction = useMemo(() => {
+    if (!selectedDoc) return false;
+    const s = selectedDoc.current_status;
+    if (userRole === "User" && ["Draft", "Rejected"].includes(s)) return true;
+    if (
+      userRole === "Accountant" &&
+      [
+        "Submitted",
+        "Review",
+        "Verified",
+        "Approved",
+        "Accounting",
+        "Posted",
+        "Payment",
+        "Paid",
+        "Failed",
+      ].includes(s)
+    )
+      return true;
+    if (userRole === "Manager" && s === "Approval") return true;
+    return false;
+  }, [selectedDoc, userRole]);
+
+  return (
+    <div className="flex h-screen bg-gray-50 text-gray-900 overflow-hidden font-sans text-sm md:text-base">
+      {/* Mobile Sidebar Overlay */}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar Navigation */}
+      <aside
+        className={`fixed lg:static inset-y-0 left-0 w-72 bg-slate-900 text-white z-50 transition-transform duration-500 transform ${
+          isSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+        } flex flex-col h-full shrink-0 shadow-2xl`}
+      >
+        <div className="p-8 border-b border-slate-800 flex items-center gap-4 shrink-0">
+          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center font-black text-xl shadow-lg">
+            M
+          </div>
+          <div>
+            <span className="font-black text-xl tracking-tighter uppercase">
+              Mini ERP
+            </span>
+            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+              Finance Management
+            </p>
+          </div>
+        </div>
+
+        <nav className="flex-1 overflow-y-auto p-6 space-y-2 custom-scrollbar">
+          <button
+            onClick={() => {
+              setView("dashboard");
+              setSidebarOpen(false);
+            }}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-bold text-sm ${
+              view === "dashboard"
+                ? "bg-blue-600 text-white shadow-lg"
+                : "text-slate-400 hover:bg-slate-800"
+            }`}
+          >
+            <LayoutDashboard size={20} /> Dashboard
+          </button>
+
+          {userRole === "User" && (
+            <button
+              onClick={() => {
+                setView("create");
+                setSidebarOpen(false);
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-bold text-sm ${
+                view === "create"
+                  ? "bg-blue-600 text-white shadow-lg"
+                  : "text-slate-400 hover:bg-slate-800"
+              }`}
+            >
+              <FilePlus size={20} /> สร้างเอกสารใหม่
+            </button>
+          )}
+
+          {userRole === "Admin" && (
+            <div className="pt-6 space-y-2">
+              <div className="px-4 text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">
+                Admin Config
+              </div>
+              <button
+                onClick={() => {
+                  setView("status_mgmt");
+                  setSidebarOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${
+                  view === "status_mgmt"
+                    ? "bg-blue-600 text-white shadow-lg"
+                    : "text-slate-400 hover:bg-slate-800"
+                }`}
+              >
+                <Settings size={20} /> จัดการสถานะ
+              </button>
+              <button
+                onClick={() => {
+                  setView("type_mgmt");
+                  setSidebarOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${
+                  view === "type_mgmt"
+                    ? "bg-blue-600 text-white shadow-lg"
+                    : "text-slate-400 hover:bg-slate-800"
+                }`}
+              >
+                <Users size={20} /> จัดการประเภท
+              </button>
+              <button
+                onClick={() => {
+                  setView("user_mgmt");
+                  setSidebarOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${
+                  view === "user_mgmt"
+                    ? "bg-blue-600 text-white shadow-lg"
+                    : "text-slate-400 hover:bg-slate-800"
+                }`}
+              >
+                <Users size={20} /> รายชื่อพนักงาน
+              </button>
+            </div>
+          )}
+        </nav>
+
+        <div className="shrink-0 p-6 border-t border-slate-800 bg-slate-900 mt-auto shadow-2xl">
+          <p className="text-[10px] text-slate-500 uppercase font-black mb-3 text-center italic tracking-widest">
+            Role Simulator
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            {(["User", "Accountant", "Manager", "Admin"] as Role[]).map((r) => (
+              <button
+                key={r}
+                onClick={() => {
+                  setUserRole(r);
+                  setView("dashboard");
+                }}
+                className={`text-[10px] py-2 rounded-lg font-black border transition-all ${
+                  userRole === r
+                    ? "bg-blue-600 border-blue-500 text-white shadow-md"
+                    : "border-slate-700 text-slate-500 hover:border-slate-500"
+                }`}
+              >
+                {r.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        </div>
+      </aside>
+
+      {/* Main Container */}
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
+        <header className="h-20 bg-white border-b border-gray-100 flex items-center justify-between px-8 shrink-0">
+          <div className="flex items-center gap-4">
+            <button
+              className="lg:hidden p-2 hover:bg-slate-50 rounded-xl transition-colors"
+              onClick={() => setSidebarOpen(true)}
+            >
+              <Menu size={24} />
+            </button>
+            <div className="hidden md:flex items-center gap-3 px-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm font-bold text-slate-600 tracking-tighter uppercase">
+              {userRole === "Admin" ? (
+                <ShieldCheck size={18} className="text-red-500" />
+              ) : (
+                <UserCircle size={18} className="text-blue-500" />
+              )}
+              {userRole} Mode
+            </div>
+          </div>
+          <div className="text-sm font-bold text-slate-400 flex items-center gap-2 tracking-tight">
+            <Calendar size={16} /> {new Date().toLocaleDateString("th-TH")}
+          </div>
+        </header>
+
+        <main className="flex-1 overflow-y-auto p-6 md:p-10 scroll-smooth custom-scrollbar">
+          <div className="max-w-6xl mx-auto pb-20">
+            {view === "dashboard" && (
+              <Dashboard
+                documents={documents}
+                setView={setView}
+                setSelectedDocId={setSelectedDocId}
+                userRole={userRole}
+                stages={stages}
+              />
+            )}
+            {view === "status_mgmt" && (
+              <StatusManagement stages={stages} setStages={setStages} />
+            )}
+            {view === "type_mgmt" && (
+              <TypeManagement docTypes={docTypes} setDocTypes={setDocTypes} />
+            )}
+
+            {view === "user_mgmt" && (
+              <div className="space-y-6 animate-in fade-in duration-500">
+                <header>
+                  <h1 className="text-2xl font-black text-gray-900 tracking-tight uppercase">
+                    Users List
+                  </h1>
+                  <p className="text-gray-500 text-sm font-medium italic text-xs">
+                    รายชื่อพนักงานที่มีสิทธิ์ใช้งานระบบ
+                  </p>
+                </header>
+                <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden text-sm">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-gray-50/50 border-b border-gray-100 text-gray-400">
+                      <tr>
+                        <th className="px-6 py-4 text-[10px] font-black uppercase">
+                          ชื่อ - นามสกุล
+                        </th>
+                        <th className="px-6 py-4 text-[10px] font-black uppercase">
+                          อีเมล
+                        </th>
+                        <th className="px-6 py-4 text-[10px] font-black uppercase">
+                          บทบาท
+                        </th>
+                        <th className="px-6 py-4 text-[10px] font-black uppercase">
+                          แผนก
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {users.map((u) => (
+                        <tr
+                          key={u.id}
+                          className="hover:bg-gray-50 transition-colors group"
+                        >
+                          <td className="px-6 py-4 whitespace-nowrap font-bold text-gray-900">
+                            {u.name}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-gray-500">
+                            {u.email}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span
+                              className={`px-2 py-0.5 rounded-lg text-[10px] font-bold ${
+                                u.role === "Admin"
+                                  ? "bg-red-100 text-red-600"
+                                  : "bg-blue-100 text-blue-600"
+                              }`}
+                            >
+                              {u.role}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">
+                            {u.department}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {view === "create" && userRole === "User" && (
+              <div className="max-w-2xl mx-auto space-y-8 animate-in slide-in-from-bottom-4 duration-500">
+                <header>
+                  <h1 className="text-3xl font-black text-gray-900 tracking-tight">
+                    สร้างเอกสารใหม่
+                  </h1>
+                  <p className="text-gray-500 font-medium">
+                    ระบุเลขที่และรายละเอียดเพื่อเริ่ม Workflow การตรวจสอบ
+                  </p>
+                </header>
+                <form
+                  onSubmit={(e: FormEvent<HTMLFormElement>) => {
+                    e.preventDefault();
+                    const formData = new FormData(e.currentTarget);
+                    const newDoc: IDocument = {
+                      document_id: Math.random().toString(36).substr(2, 9),
+                      document_no: formData.get("docNo") as string,
+                      document_type: formData.get("type") as string,
+                      description: formData.get("desc") as string,
+                      current_status: "Draft",
+                      created_by: "Current User",
+                      created_at: new Date()
+                        .toLocaleString("th-TH")
+                        .substring(0, 16)
+                        .replace(",", ""),
+                      owner: "User",
+                    };
+                    setDocuments([newDoc, ...documents]);
+                    setView("dashboard");
+                  }}
+                  className="bg-white p-10 rounded-3xl border border-gray-100 shadow-xl space-y-6"
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                        เลขที่เอกสาร
+                      </label>
+                      <input
+                        name="docNo"
+                        required
+                        className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-4 focus:ring-blue-500/10 font-bold transition-all"
+                        placeholder="เช่น INV-2024-001"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                        ประเภท
+                      </label>
+                      <select
+                        name="type"
+                        className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-4 focus:ring-blue-500/10 font-bold transition-all"
+                      >
+                        {docTypes.map((t) => (
+                          <option key={t}>{t}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                      รายละเอียดเหตุผล
+                    </label>
+                    <textarea
+                      name="desc"
+                      required
+                      rows={4}
+                      className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-4 focus:ring-blue-500/10 font-bold resize-none transition-all"
+                      placeholder="ระบุวัตถุประสงค์ในการเบิกจ่าย..."
+                    />
+                  </div>
+                  <div className="flex gap-4 pt-4">
+                    <button
+                      type="submit"
+                      className="flex-1 bg-blue-600 text-white py-4 rounded-2xl font-black shadow-lg shadow-blue-500/20 active:scale-95 transition-all"
+                    >
+                      เริ่มร่างเอกสาร (Draft)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setView("dashboard")}
+                      className="px-8 text-slate-400 font-bold hover:text-slate-900 transition-colors"
+                    >
+                      ยกเลิก
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {view === "detail" && selectedDoc && (
+              <DetailView
+                selectedDoc={selectedDoc}
+                stages={stages}
+                history={history}
+                canUserAction={canUserAction}
+                userRole={userRole}
+                handleUpdateStatus={handleUpdateStatus}
+                setView={setView}
+              />
+            )}
+          </div>
+        </main>
+      </div>
+
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 0px; background: transparent; }
+        .custom-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      `}</style>
+    </div>
+  );
+}
+
+// Detail View Component
+interface DetailViewProps {
+  selectedDoc: IDocument;
+  stages: string[];
+  history: IHistory[];
+  canUserAction: boolean;
+  userRole: Role;
+  handleUpdateStatus: (id: string, status: string, comment: string) => void;
+  setView: (v: string) => void;
+}
+
+function DetailView({
+  selectedDoc,
+  stages,
+  history,
+  canUserAction,
+  userRole,
+  handleUpdateStatus,
+  setView,
+}: DetailViewProps) {
+  return (
+    <div className="space-y-8 animate-in fade-in duration-500 text-sm">
+      <button
+        onClick={() => setView("dashboard")}
+        className="flex items-center gap-2 text-gray-400 hover:text-gray-900 font-bold transition-all group"
+      >
+        <ArrowLeft
+          size={18}
+          className="group-hover:-translate-x-1 transition-transform"
+        />{" "}
+        กลับหน้า Dashboard
+      </button>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 space-y-8">
+          {/* ข้อมูลหัวเอกสาร */}
+          <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-2 h-full bg-blue-600" />
+            <div className="flex flex-col md:flex-row justify-between items-start gap-4 mb-8">
+              <div>
+                <div className="flex items-center gap-4 mb-2">
+                  <h1 className="text-3xl font-black text-slate-900 tracking-tighter">
+                    {selectedDoc.document_no}
+                  </h1>
+                  <StatusBadge status={selectedDoc.current_status} />
+                </div>
+                <p className="text-gray-500 font-medium">
+                  {selectedDoc.description}
+                </p>
+                <div className="mt-4 flex gap-6 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+                  <span className="flex items-center gap-1 font-black">
+                    <UserCircle size={14} /> โดย: {selectedDoc.created_by}
+                  </span>
+                  <span className="flex items-center gap-1 font-black">
+                    <Calendar size={14} /> วันที่: {selectedDoc.created_at}
+                  </span>
+                </div>
+              </div>
+              <div className="bg-blue-50 p-4 rounded-2xl text-right shrink-0 border border-blue-100 shadow-sm">
+                <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">
+                  ผู้รับผิดชอบปัจจุบัน
+                </p>
+                <p className="text-blue-600 font-black">{selectedDoc.owner}</p>
+              </div>
+            </div>
+            <StepProgress
+              currentStatus={selectedDoc.current_status}
+              stages={stages}
+            />
+          </div>
+
+          {/* Timeline */}
+          <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
+            <h2 className="text-lg font-black text-slate-800 mb-8 flex items-center gap-3 tracking-tight uppercase">
+              <HistoryIcon size={20} className="text-blue-500" /> Workflow Audit
+              Trail
+            </h2>
+            <div className="space-y-0 ml-4">
+              {history
+                .filter((h) => h.document_id === selectedDoc.document_id)
+                .map((h, i) => (
+                  <div
+                    key={h.id}
+                    className="relative pl-10 pb-10 border-l-2 border-slate-100 last:border-none last:pb-0"
+                  >
+                    <div
+                      className={`absolute -left-[11px] top-0 w-5 h-5 rounded-full border-4 border-white shadow-sm transition-all ${
+                        i === 0
+                          ? "bg-blue-600 ring-4 ring-blue-50"
+                          : "bg-slate-300"
+                      }`}
+                    />
+                    <div className="flex justify-between mb-1">
+                      <span className="font-black text-slate-800 text-sm tracking-tight">
+                        {h.action}
+                      </span>
+                      <span className="text-slate-400 text-[10px] font-bold uppercase">
+                        {h.action_at}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <span className="text-xs font-bold text-slate-500 tracking-tight">
+                        โดย {h.action_by}
+                      </span>
+                      <StatusBadge status={h.to_status} />
+                    </div>
+                    {h.comment && (
+                      <div className="p-4 bg-slate-50 rounded-2xl text-xs text-slate-600 italic font-medium border border-slate-100 shadow-sm">
+                        "{h.comment}"
+                      </div>
+                    )}
+                  </div>
+                ))}
+              {history.filter((h) => h.document_id === selectedDoc.document_id)
+                .length === 0 && (
+                <p className="text-slate-400 italic text-xs ml-4">
+                  ยังไม่มีประวัติการดำเนินการ
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Action Controls */}
+        <ActionControls
+          selectedDoc={selectedDoc}
+          canUserAction={canUserAction}
+          userRole={userRole}
+          handleUpdateStatus={handleUpdateStatus}
+        />
+      </div>
+    </div>
+  );
+}
+
+interface ActionControlsProps {
+  selectedDoc: IDocument;
+  canUserAction: boolean;
+  userRole: Role;
+  handleUpdateStatus: (id: string, status: string, comment: string) => void;
+}
+
+function ActionControls({
+  selectedDoc,
+  canUserAction,
+  userRole,
+  handleUpdateStatus,
+}: ActionControlsProps) {
+  return (
+    <div className="space-y-6">
+      <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-xl shadow-blue-900/5 sticky top-8">
+        <h3 className="font-black text-slate-900 mb-6 uppercase tracking-wider text-sm flex items-center gap-2">
+          <ShieldCheck size={18} className="text-blue-500" /> Action Controls
+        </h3>
+        {selectedDoc.current_status !== "Completed" && canUserAction ? (
+          <div className="space-y-4">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
+              <MessageSquare size={12} /> หมายเหตุ (Comment)
+            </label>
+            <textarea
+              id="actComment"
+              placeholder="ระบุเหตุผลหรือข้อความเพิ่มเติม..."
+              className="w-full h-24 p-3 text-xs border border-gray-100 rounded-2xl outline-none bg-slate-50 focus:ring-4 focus:ring-blue-500/10 font-medium resize-none transition-all"
+            />
+            <div className="space-y-3 pt-4 border-t border-slate-50">
+              <RenderActions
+                selectedDoc={selectedDoc}
+                userRole={userRole}
+                handleUpdateStatus={handleUpdateStatus}
+              />
+              <p className="text-[10px] text-slate-400 text-center font-black uppercase italic mt-4 pt-3 border-t border-slate-50">
+                Role: {userRole}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="p-8 bg-slate-50 rounded-2xl text-center border border-dashed border-slate-200 shadow-inner">
+            {selectedDoc.current_status === "Completed" ? (
+              <>
+                <CheckCircle2
+                  size={40}
+                  className="text-green-500 mx-auto mb-3"
+                />
+                <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest text-green-600">
+                  เอกสารเสร็จสมบูรณ์
+                </p>
+              </>
+            ) : (
+              <>
+                <ShieldCheck
+                  size={40}
+                  className="text-slate-300 mx-auto mb-3"
+                />
+                <p className="text-[10px] text-slate-400 font-black uppercase leading-relaxed whitespace-pre-line">
+                  {userRole === "Admin"
+                    ? "Admin Mode\n(ViewOnly)"
+                    : `รอการดำเนินการจากฝ่ายอื่น\n(ปัจจุบัน: ${selectedDoc.owner})`}
+                </p>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+interface RenderActionsProps {
+  selectedDoc: IDocument;
+  userRole: Role;
+  handleUpdateStatus: (id: string, status: string, comment: string) => void;
+}
+
+function RenderActions({
+  selectedDoc,
+  userRole,
+  handleUpdateStatus,
+}: RenderActionsProps) {
+  const getComment = () => {
+    return (document.getElementById("actComment") as HTMLTextAreaElement)
+      ?.value || "";
+  };
+
+  const actions = [
+    {
+      condition:
+        userRole === "User" &&
+        (selectedDoc.current_status === "Draft" ||
+          selectedDoc.current_status === "Rejected"),
+      label: "ส่งตรวจสอบ (Submit)",
+      status: "Submitted",
+      color: "bg-blue-600",
+    },
+    {
+      condition:
+        userRole === "Accountant" && selectedDoc.current_status === "Submitted",
+      label: "รับเรื่องตรวจสอบ (Review)",
+      status: "Review",
+      color: "bg-yellow-500",
+    },
+    {
+      condition:
+        userRole === "Accountant" && selectedDoc.current_status === "Review",
+      label: "ตรวจผ่าน (Verify)",
+      status: "Verified",
+      color: "bg-cyan-600",
+    },
+    {
+      condition:
+        userRole === "Accountant" && selectedDoc.current_status === "Verified",
+      label: "ส่งขออนุมัติ (Pending Approval)",
+      status: "Approval",
+      color: "bg-orange-500",
+    },
+    {
+      condition: userRole === "Manager" && selectedDoc.current_status === "Approval",
+      label: "อนุมัติเอกสาร (Approve)",
+      status: "Approved",
+      color: "bg-emerald-600",
+    },
+    {
+      condition:
+        userRole === "Accountant" && selectedDoc.current_status === "Approved",
+      label: "รับงานลงบัญชี",
+      status: "Accounting",
+      color: "bg-indigo-600",
+    },
+    {
+      condition:
+        userRole === "Accountant" && selectedDoc.current_status === "Accounting",
+      label: "ลงรายการบัญชี (Post)",
+      status: "Posted",
+      color: "bg-violet-600",
+    },
+    {
+      condition:
+        userRole === "Accountant" && selectedDoc.current_status === "Posted",
+      label: "เตรียมจ่ายเงิน (Payment)",
+      status: "Payment",
+      color: "bg-purple-600",
+    },
+    {
+      condition:
+        userRole === "Accountant" && selectedDoc.current_status === "Payment",
+      label: "ยืนยันจ่ายแล้ว (Paid)",
+      status: "Paid",
+      color: "bg-green-600",
+    },
+    {
+      condition:
+        userRole === "Accountant" &&
+        (selectedDoc.current_status === "Paid" ||
+          selectedDoc.current_status === "Failed"),
+      label: "จัดเก็บเอกสาร",
+      status: "Completed",
+      color: "bg-slate-800",
+    },
+    {
+      condition:
+        ["Accountant", "Manager"].includes(userRole) &&
+        ![
+          "Draft",
+          "Rejected",
+          "Completed",
+          "Paid",
+        ].includes(selectedDoc.current_status),
+      label: "ตีกลับ (Reject)",
+      status: "Rejected",
+      color: "bg-red-100 text-red-600 hover:bg-red-200",
+    },
+  ];
+
+  return (
+    <>
+      {actions
+        .filter((a) => a.condition)
+        .map((a, i) => (
+          <button
+            key={i}
+            onClick={() =>
+              handleUpdateStatus(selectedDoc.document_id, a.status, getComment())
+            }
+            className={`w-full ${a.color} text-white py-3.5 rounded-xl font-black active:scale-95 transition-all text-xs`}
+          >
+            {a.label}
+          </button>
+        ))}
+    </>
+  );
+}
