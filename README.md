@@ -1,73 +1,66 @@
-# React + TypeScript + Vite
+## Document Manager (React + TypeScript + Vite)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+เว็บแอปสำหรับจัดการเอกสารภายในองค์กร พัฒนาด้วย **React + TypeScript + Vite** และใช้ **Firebase Firestore** เป็นฐานข้อมูลแบบเรียลไทม์
 
-Currently, two official plugins are available:
+### ฟีเจอร์หลัก
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- สร้างเอกสารใหม่ พร้อมเลขที่เอกสารไม่ซ้ำกัน
+- หน้ารวม **Dashboard** แสดงรายการเอกสารทั้งหมด
+  - ค้นหาด้วยเลขที่เอกสารหรือคำอธิบาย
+  - กรองตามสถานะ (Draft, Review, Approval, Accounting, Payment, Completed, Rejected, Paid ฯลฯ)
+  - การ์ดสรุป: ทั้งหมด, กำลังดำเนินการ, สำเร็จแล้ว, ตีกลับ, ใกล้ครบ 3 วัน, เกิน 3 วันแล้ว
+  - คลิกการ์ดเพื่อแสดงเฉพาะเอกสารกลุ่มนั้น
+  - แสดงคำเตือนเอกสารที่ใกล้ครบ/เกิน 3 วันจากวันที่สร้าง
+- หน้า **รายละเอียดเอกสาร** (Detail)
+  - ดูข้อมูลเอกสารทั้งหมดและประวัติการเปลี่ยนสถานะ (workflow history)
+  - เปลี่ยนสถานะเอกสารตามลำดับขั้น พร้อมบันทึกประวัติลง Firestore
+- หน้าจัดการอื่น ๆ
+  - จัดการประเภทเอกสาร (Type Management) พร้อมตรวจชื่อซ้ำ
+  - Admin สามารถลบเอกสารจากหน้า Dashboard ได้
 
-## React Compiler
+> หมายเหตุ: ไฟล์ `src/firebase.ts` จะไม่ถูกรวมใน Git (อยู่ใน `.gitignore`) ผู้ใช้งานต้องสร้างไฟล์นี้และใส่ค่า config ของ Firebase เอง
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+ตัวอย่างโครงสร้างไฟล์ `src/firebase.ts` (ให้ใส่ค่า config ของโปรเจกต์จริงเอง):
 
-## Expanding the ESLint configuration
+```ts
+import { initializeApp } from "firebase/app";
+import { getFirestore } from "firebase/firestore";
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+const firebaseConfig = {
+  apiKey: "...",
+  authDomain: "...",
+  projectId: "...",
+  storageBucket: "...",
+  messagingSenderId: "...",
+  appId: "...",
+};
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+const app = initializeApp(firebaseConfig);
+export const db = getFirestore(app);
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### การติดตั้งและรันโปรเจกต์
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+1. ติดตั้ง dependencies
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
 ```
+
+2. สร้างไฟล์ `src/firebase.ts` ตามตัวอย่างด้านบน แล้วใส่ config ของ Firebase โปรเจกต์ของคุณ
+
+3. รันโหมดพัฒนา
+
+```bash
+npm run dev
+```
+
+จากนั้นเปิดเบราว์เซอร์ที่ URL ที่ Vite แสดง (เช่น `http://localhost:5173`)
+
+4. สร้างไฟล์ build สำหรับ deploy
+
+```bash
+npm run build
+```
+
+โฟลเดอร์ build จะอยู่ใน `dist/`
